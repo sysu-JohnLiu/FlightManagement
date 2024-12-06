@@ -95,8 +95,8 @@ WalletWindow::~WalletWindow() {}
 void WalletWindow::loadBalance()
 {
     QSqlQuery query;
-    query.prepare("SELECT balance FROM users WHERE username = :username");
-    query.bindValue(":username", "user1");
+    query.prepare("SELECT balance FROM users WHERE ID_card = :idCard");
+    query.bindValue(":idCard", "23331001");  // 使用指定的 ID_card
 
     if (query.exec() && query.next()) {
         balance = query.value(0).toDouble();
@@ -106,26 +106,68 @@ void WalletWindow::loadBalance()
     }
 }
 
+
 void WalletWindow::updateBalanceInDatabase()
 {
     QSqlQuery query;
-    query.prepare("UPDATE users SET balance = :balance WHERE username = :username");
+    query.prepare("UPDATE users SET balance = :balance WHERE ID_card = :idCard");
     query.bindValue(":balance", balance);
-    query.bindValue(":username", "user1");
+    query.bindValue(":idCard", "23331001");  // 使用指定的 ID_card
 
     if (!query.exec()) {
         QMessageBox::warning(this, "更新失败", "无法更新余额：" + query.lastError().text());
     }
 }
 
+
 void WalletWindow::onRecharge()
 {
     bool ok;
     double amount = QInputDialog::getDouble(this, "充值", "请输入充值金额:", 0, 0, 10000, 2, &ok);
     if (ok && amount > 0) {
-        balance += amount;
-        balanceLabel->setText(QString("余额: %1 元").arg(balance, 0, 'f', 2));
-        updateBalanceInDatabase();
+        // 弹出输入密码的对话框
+        bool passwordOk;
+        QString password = QInputDialog::getText(this, "密码验证", "请输入密码:", QLineEdit::Password, "", &passwordOk);
+
+        if (passwordOk && !password.isEmpty()) {
+            // 验证密码
+            QSqlQuery query;
+            query.prepare("SELECT password FROM users WHERE ID_card = :idCard");
+            query.bindValue(":idCard", "23331001");  // 使用指定的 ID_card
+
+            if (query.exec() && query.next()) {
+                QString correctPassword = query.value(0).toString();
+                if (password == correctPassword) {
+                    // 密码正确，执行充值操作
+                    query.prepare("SELECT ID_card FROM users WHERE ID_card = :idCard");
+                    query.bindValue(":idCard", "23331001");
+
+                    if (query.exec() && query.next()) {
+                        QString idCard = query.value(0).toString(); // 获取 ID_card
+
+                        query.prepare("INSERT INTO wallet_transactions (username, ID_card, transaction_type, amount) "
+                                      "VALUES (:username, :idCard, 'Recharge', :amount)");
+                        query.bindValue(":username", "user1");
+                        query.bindValue(":idCard", idCard); // 插入 ID_card
+                        query.bindValue(":amount", amount);
+
+                        if (query.exec()) {
+                            balance += amount;
+                            balanceLabel->setText(QString("余额: %1 元").arg(balance, 0, 'f', 2));
+                            updateBalanceInDatabase();
+                        } else {
+                            QMessageBox::warning(this, "充值失败", "无法记录充值记录：" + query.lastError().text());
+                        }
+                    } else {
+                        QMessageBox::warning(this, "获取 ID 失败", "无法获取用户的 ID_card：" + query.lastError().text());
+                    }
+                } else {
+                    QMessageBox::warning(this, "密码错误", "密码输入错误！");
+                }
+            } else {
+                QMessageBox::warning(this, "查询失败", "无法验证密码：" + query.lastError().text());
+            }
+        }
     }
 }
 
@@ -134,15 +176,60 @@ void WalletWindow::onWithdraw()
     bool ok;
     double amount = QInputDialog::getDouble(this, "提现", "请输入提现金额:", 0, 0, balance, 2, &ok);
     if (ok && amount > 0) {
-        balance -= amount;
-        balanceLabel->setText(QString("余额: %1 元").arg(balance, 0, 'f', 2));
-        updateBalanceInDatabase();
+        // 弹出输入密码的对话框
+        bool passwordOk;
+        QString password = QInputDialog::getText(this, "密码验证", "请输入密码:", QLineEdit::Password, "", &passwordOk);
+
+        if (passwordOk && !password.isEmpty()) {
+            // 验证密码
+            QSqlQuery query;
+            query.prepare("SELECT password FROM users WHERE ID_card = :idCard");
+            query.bindValue(":idCard", "23331001");  // 使用指定的 ID_card
+
+            if (query.exec() && query.next()) {
+                QString correctPassword = query.value(0).toString();
+                if (password == correctPassword) {
+                    // 密码正确，执行提现操作
+                    query.prepare("SELECT ID_card FROM users WHERE ID_card = :idCard");
+                    query.bindValue(":idCard", "23331001");
+
+                    if (query.exec() && query.next()) {
+                        QString idCard = query.value(0).toString(); // 获取 ID_card
+
+                        query.prepare("INSERT INTO wallet_transactions (username, ID_card, transaction_type, amount) "
+                                      "VALUES (:username, :idCard, 'Withdraw', :amount)");
+                        query.bindValue(":username", "user1");
+                        query.bindValue(":idCard", idCard); // 插入 ID_card
+                        query.bindValue(":amount", amount);
+
+                        if (query.exec()) {
+                            balance -= amount;
+                            balanceLabel->setText(QString("余额: %1 元").arg(balance, 0, 'f', 2));
+                            updateBalanceInDatabase();
+                        } else {
+                            QMessageBox::warning(this, "提现失败", "无法记录提现记录：" + query.lastError().text());
+                        }
+                    } else {
+                        QMessageBox::warning(this, "获取 ID 失败", "无法获取用户的 ID_card：" + query.lastError().text());
+                    }
+                } else {
+                    QMessageBox::warning(this, "密码错误", "密码输入错误！");
+                }
+            } else {
+                QMessageBox::warning(this, "查询失败", "无法验证密码：" + query.lastError().text());
+            }
+        }
     }
 }
 
 void WalletWindow::onViewBillClicked()
 {
     QSqlQuery query;
+
+    if (!query.exec("SET NAMES 'utf8mb4'")) {
+        qDebug() << "Failed to set character set: " << query.lastError().text();
+    }
+
     query.prepare("SELECT transaction_type, amount, transaction_time, flight_number, departure_city, destination_city "
                   "FROM wallet_transactions WHERE username = :username ORDER BY transaction_time DESC");
     query.bindValue(":username", "user1");
@@ -158,21 +245,24 @@ void WalletWindow::onViewBillClicked()
             QString departureCity = query.value("departure_city").toString();
             QString destinationCity = query.value("destination_city").toString();
 
+            // 替换 T 为 空格
             transactionTime.replace("T", " ");
 
+            // 根据交易类型设置颜色
             QString color;
             if (transactionType == "Recharge") {
-                color = "green";
+                color = "green";  // 绿色
             } else if (transactionType == "Withdraw") {
-                color = "blue";
+                color = "blue";   // 蓝色
             } else if (transactionType == "Buy") {
-                color = "orange";
+                color = "orange"; // 橙色
             } else if (transactionType == "Return") {
-                color = "red";
+                color = "red";    // 红色
             } else {
-                color = "black";
+                color = "black";  // 默认黑色
             }
 
+            // 使用 HTML 显示交易类型和颜色
             billDetails.append(QString("<span style='color:%1;'>交易类型: %2</span><br>").arg(color, transactionType));
             billDetails.append(QString("金额: %1 元<br>").arg(amount, 0, 'f', 2));
             billDetails.append(QString("交易时间: %1<br>").arg(transactionTime));
@@ -183,16 +273,19 @@ void WalletWindow::onViewBillClicked()
                 billDetails.append(QString("目的地: %1<br>").arg(destinationCity));
             }
 
-            billDetails.append("<hr>");
+            billDetails.append("<hr>");  // 分隔线
         }
+
 
         if (billDetails.isEmpty()) {
             QMessageBox::information(this, "账单明细", "没有找到任何账单记录。");
         } else {
+            // 创建非模态窗口
             QWidget *billWidget = new QWidget;
             billWidget->setWindowTitle("账单明细");
             billWidget->resize(600, 500);
 
+            // 设置样式
             billWidget->setStyleSheet(
                 "QWidget { background-color: #f8f9fa; border-radius: 10px; }"
                 "QTextBrowser { border: none; font-family: 'Microsoft YaHei'; }");
@@ -200,25 +293,40 @@ void WalletWindow::onViewBillClicked()
             QVBoxLayout *layout = new QVBoxLayout(billWidget);
             layout->setContentsMargins(15, 15, 15, 15);
 
+            // 使用 QTextBrowser 替代 QTextEdit，支持更好的 HTML 样式渲染
             QTextBrowser *billTextBrowser = new QTextBrowser(billWidget);
             billTextBrowser->setHtml(billDetails);
-            billTextBrowser->setOpenLinks(false);
+            billTextBrowser->setOpenLinks(false); // 禁止打开超链接
 
+            // 设置标题
             QLabel *titleLabel = new QLabel("账单明细", billWidget);
-            titleLabel->setStyleSheet("font-size: 18px; font-weight: bold; color: #333333;");
+            titleLabel->setStyleSheet(
+                "font-size: 20px; font-weight: bold; color: #343a40; margin-bottom: 10px;");
             titleLabel->setAlignment(Qt::AlignCenter);
 
+            // 添加关闭按钮
             QPushButton *closeButton = new QPushButton("关闭", billWidget);
-            closeButton->setStyleSheet(buttonStyle);
+            closeButton->setStyleSheet(
+                "QPushButton {"
+                "    background-color: #007BFF;"
+                "    color: white;"
+                "    border: none;"
+                "    padding: 10px 20px;"
+                "    font-size: 14px;"
+                "    border-radius: 5px;"
+                "}"
+                "QPushButton:hover { background-color: #0056b3; }");
             connect(closeButton, &QPushButton::clicked, billWidget, &QWidget::close);
 
-            layout->addWidget(titleLabel, 0, Qt::AlignCenter);
+            layout->addWidget(titleLabel);
             layout->addWidget(billTextBrowser);
             layout->addWidget(closeButton, 0, Qt::AlignCenter);
+            billWidget->setLayout(layout);
 
+            // 显示窗口
             billWidget->show();
         }
     } else {
-        QMessageBox::warning(this, "加载失败", "无法加载账单明细：" + query.lastError().text());
+        QMessageBox::warning(this, "查询失败", "无法加载账单信息：" + query.lastError().text());
     }
 }
