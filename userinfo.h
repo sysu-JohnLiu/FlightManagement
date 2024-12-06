@@ -18,7 +18,6 @@ private slots:
     void onEditAvatar();
     void onEditPhone();
     void onEditEmail();
-    void onEditName();
     void onEditGender();
     void onEditBirthday();
     void onEditPassword();
@@ -26,15 +25,15 @@ private slots:
 private:
     void saveUserData(const QString &field, const QString &value); // 保存到数据库
 
-    QLabel *avatarLabel;
-    QLabel *phoneLabel;
-    QLabel *emailLabel;
-    QLabel *nicknameLabel;
-    QLabel *nameLabel;
-    QLabel *genderLabel;
-    QLabel *birthdayLabel;
-    QLabel *passwordLabel;
-    QPushButton *avatarEditButton;
+    QLabel *avatarLabel;       // 头像显示
+    QLabel *phoneLabel;        // 手机号显示
+    QLabel *emailLabel;        // 邮箱显示
+    QLabel *nameLabel;         // 姓名显示
+    QLabel *genderLabel;       // 性别显示
+    QLabel *birthdayLabel;     // 生日显示
+    QLabel *passwordLabel;     // 密码显示
+    QLabel *idCardLabel;       // 身份证号显示（新增）
+    QPushButton *avatarEditButton; // 修改头像按钮
 };
 
 #endif // USERINFO_H
